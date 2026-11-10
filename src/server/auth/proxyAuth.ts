@@ -7,14 +7,19 @@
  * SECURITY MODEL:
  * - Assumes proxy is trusted and upstream from MeshMonitor
  * - Requires TRUST_PROXY to be configured
- * - MeshMonitor should NOT be directly accessible (use Docker networks, firewall, etc.)
- * - No JWT signature validation (proxy already validated)
+ * - By default the Cloudflare JWT payload is trusted without checking its
+ *   signature, so MeshMonitor must NOT be directly accessible (use Docker
+ *   networks, firewall, etc.)
+ * - Set PROXY_AUTH_CF_JWKS_FILE (with PROXY_AUTH_CF_ISSUER and
+ *   PROXY_AUTH_CF_AUDIENCE) to verify the JWT offline instead; in that mode
+ *   only a verified Cloudflare JWT is accepted and the other headers are ignored
  */
 
 import { Request } from 'express';
 import { getEnvironmentConfig } from '../config/environment.js';
 import { logger } from '../../utils/logger.js';
 import { getNestedValue, normalizeGroups, groupsContainAny } from './claims.js';
+import { verifyCloudflareJwt } from './cloudflareJwt.js';
 
 // Re-export so existing importers (and tests) that pull `normalizeGroups` from
 // this module keep working now that the implementation lives in ./claims.
@@ -76,7 +81,16 @@ function decodeJwtPayload(jwtToken: string): any {
  * Extract user from Cloudflare Access JWT
  */
 function extractFromCloudflareJwt(jwtToken: string): ProxyUser | null {
-  const payload = decodeJwtPayload(jwtToken);
+  const config = getEnvironmentConfig();
+  // With a JWKS file configured the signature, issuer, audience and expiry are
+  // checked; otherwise the payload is trusted as-is (proxy-only deployments).
+  const payload = config.proxyAuthCfJwksFile
+    ? verifyCloudflareJwt(jwtToken, {
+        jwksFile: config.proxyAuthCfJwksFile,
+        issuer: config.proxyAuthCfIssuer ?? '',
+        audiences: config.proxyAuthCfAudiences
+      })
+    : decodeJwtPayload(jwtToken);
   if (!payload) return null;
 
   const email = payload.email;
@@ -85,7 +99,6 @@ function extractFromCloudflareJwt(jwtToken: string): ProxyUser | null {
     return null;
   }
 
-  const config = getEnvironmentConfig();
   const groupsClaim = config.proxyAuthJwtGroupsClaim;
   const rawGroups = getNestedValue(payload, groupsClaim);
   const groups = normalizeGroups(rawGroups);
@@ -173,6 +186,12 @@ export function extractProxyUser(req: Request): ProxyUser | null {
       logger.debug(`✅ Extracted user from Cloudflare Access: ${user.email}`);
       return user;
     }
+  }
+
+  // Verified mode: the other headers below are unauthenticated, so they must
+  // never stand in for a JWT that is missing or failed verification.
+  if (config.proxyAuthCfJwksFile) {
+    return null;
   }
 
   // Priority 2: oauth2-proxy

@@ -155,6 +155,7 @@ If you're running multiple MeshMonitor instances on the same host (different por
 |----------|-------------|---------|
 | `DISABLE_ANONYMOUS` | Disable anonymous access - require login for all features | `false` |
 | `DISABLE_LOCAL_AUTH` | Disable local username/password authentication (OIDC only) | `false` |
+| `PROXY_AUTH_CF_JWKS_FILE` | Verify the Cloudflare Access JWT offline against this JWKS file (also needs `PROXY_AUTH_CF_ISSUER`, `PROXY_AUTH_CF_AUDIENCE`; see [SSO](/configuration/sso)) | _(unset: unverified)_ |
 | `ADMIN_USERNAME` | Override default admin username on first run | `admin` |
 
 ### Rate Limiting Variables

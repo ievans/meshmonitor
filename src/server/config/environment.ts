@@ -280,6 +280,9 @@ export interface EnvironmentConfig {
   proxyAuthAdminEmails: string[];
   proxyAuthNormalUserGroups: string[];
   proxyAuthJwtGroupsClaim: string;
+  proxyAuthCfJwksFile: string | undefined;
+  proxyAuthCfIssuer: string | undefined;
+  proxyAuthCfAudiences: string[];
   proxyAuthHeaderEmail: string | undefined;
   proxyAuthHeaderGroups: string | undefined;
   proxyAuthLogoutUrl: string | undefined;
@@ -654,6 +657,17 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
     .filter(Boolean);
 
   const proxyAuthJwtGroupsClaim = process.env.PROXY_AUTH_JWT_GROUPS_CLAIM || 'groups';
+  // Offline verification of the Cloudflare Access JWT. When the JWKS file is set,
+  // ONLY a verified Cloudflare JWT is accepted; the other proxy headers are ignored.
+  const proxyAuthCfJwksFile = process.env.PROXY_AUTH_CF_JWKS_FILE || undefined;
+  const proxyAuthCfIssuer = process.env.PROXY_AUTH_CF_ISSUER || undefined;
+  const proxyAuthCfAudiences = (process.env.PROXY_AUTH_CF_AUDIENCE || '')
+    .split(',')
+    .map(a => a.trim())
+    .filter(Boolean);
+  if (proxyAuthCfJwksFile && (!proxyAuthCfIssuer || proxyAuthCfAudiences.length === 0)) {
+    logger.error('PROXY_AUTH_CF_JWKS_FILE needs PROXY_AUTH_CF_ISSUER and PROXY_AUTH_CF_AUDIENCE; all proxy logins will be rejected until set.');
+  }
   const proxyAuthHeaderEmail = process.env.PROXY_AUTH_HEADER_EMAIL || undefined;
   const proxyAuthHeaderGroups = process.env.PROXY_AUTH_HEADER_GROUPS || undefined;
   const proxyAuthLogoutUrl = process.env.PROXY_AUTH_LOGOUT_URL || undefined;
@@ -802,6 +816,7 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
     logger.debug(`   PROXY_AUTH_ADMIN_EMAILS: ${proxyAuthAdminEmails.length > 0 ? '***configured***' : 'not set'}`);
     logger.debug(`   PROXY_AUTH_NORMAL_USER_GROUPS: ${proxyAuthNormalUserGroups.length > 0 ? proxyAuthNormalUserGroups.join(', ') : 'not set (all proxy users allowed)'}`);
     logger.debug(`   PROXY_AUTH_JWT_GROUPS_CLAIM: ${proxyAuthJwtGroupsClaim}`);
+    logger.debug(`   PROXY_AUTH_CF_JWKS_FILE: ${proxyAuthCfJwksFile ?? 'not set (JWT unverified)'}`);
     logger.debug(`   PROXY_AUTH_AUDIT_LOGGING: ${proxyAuthAuditLogging.value}`);
     if (proxyAuthLogoutUrl) {
       logger.debug(`   PROXY_AUTH_LOGOUT_URL: ${proxyAuthLogoutUrl}`);
@@ -926,6 +941,9 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
     proxyAuthAdminEmails,
     proxyAuthNormalUserGroups,
     proxyAuthJwtGroupsClaim,
+    proxyAuthCfJwksFile,
+    proxyAuthCfIssuer,
+    proxyAuthCfAudiences,
     proxyAuthHeaderEmail,
     proxyAuthHeaderGroups,
     proxyAuthLogoutUrl,
