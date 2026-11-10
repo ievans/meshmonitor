@@ -389,34 +389,6 @@ docker logs meshmonitor | grep "auth"
 kubectl logs -f deployment/meshmonitor | grep "auth"
 ```
 
-## Verifying the Cloudflare Access JWT (proxy auth)
-
-By default, proxy auth decodes the `Cf-Access-Jwt-Assertion` header **without
-checking its signature**: it relies on nothing but the proxy being able to reach
-MeshMonitor. To have MeshMonitor verify the token itself, with no network access
-to Cloudflare, give it the Access signing keys as a file:
-
-| Variable | Description |
-|----------|-------------|
-| `PROXY_AUTH_CF_JWKS_FILE` | Path to the JSON from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`. Setting it turns verification on. |
-| `PROXY_AUTH_CF_ISSUER` | Expected `iss`, e.g. `https://<team>.cloudflareaccess.com`. |
-| `PROXY_AUTH_CF_AUDIENCE` | Comma-separated Access application AUD tag(s). |
-
-When enabled:
-
-- Only RS256 tokens whose signature matches a key in the file (by `kid`), with the
-  right `iss` and `aud` and an unexpired `exp`, are accepted.
-- Only the Cloudflare JWT is trusted. `X-Auth-Request-*`, `Remote-User` and the
-  other proxy headers are ignored, so they cannot stand in for a bad token.
-- Anything that fails (no token, bad token, unreadable or empty key file, missing
-  `ISSUER`/`AUDIENCE`) means no identity, never a fallback.
-- The file is re-read when it changes, so a refresher can replace it (write to a
-  temp file and rename) without restarting MeshMonitor. Cloudflare rotates its
-  signing keys periodically, so refresh it on a timer (daily is plenty).
-
-Group-based admin and access (`PROXY_AUTH_ADMIN_GROUPS`,
-`PROXY_AUTH_NORMAL_USER_GROUPS`) read the verified token's `groups` claim.
-
 ## Combining OIDC with Local Auth
 
 You can use both OIDC and local authentication simultaneously:
